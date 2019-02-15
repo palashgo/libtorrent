@@ -72,53 +72,52 @@ POSSIBILITY OF SUCH DAMAGE.
 //	struct temp_storage : storage_interface
 //	{
 //		temp_storage(file_storage const& fs) : storage_interface(fs) {}
-//		bool initialize(storage_error& se) override { return false; }
-//		bool has_any_file() override { return false; }
-//		int read(char* buf, int piece, int offset, int size) override
+//		void initialize(storage_error& se) override {}
+//		bool has_any_file(storage_error& ec) override { return false; }
+//		virtual void set_file_priority(aux::vector<download_priority_t, file_index_t>& prio
+//			, storage_error& ec) {}
+//		int readv(span<iovec_t const> bufs, piece_index_t piece
+//			, int offset, open_mode_t flags, storage_error& ec) override
 //		{
-//			std::map<int, std::vector<char>>::const_iterator i = m_file_data.find(piece);
+//			auto const i = m_file_data.find(piece);
 //			if (i == m_file_data.end()) return 0;
-//			int available = i->second.size() - offset;
-//			if (available <= 0) return 0;
-//			if (available > size) available = size;
-//			memcpy(buf, &i->second[offset], available);
-//			return available;
-//		}
-//		int write(const char* buf, int piece, int offset, int size) override
-//		{
-//			std::vector<char>& data = m_file_data[piece];
-//			if (data.size() < offset + size) data.resize(offset + size);
-//			std::memcpy(&data[offset], buf, size);
-//			return size;
-//		}
-//		bool rename_file(file_index_t file, std::string const& new_name) override
-//		{ assert(false); return false; }
-//		status_t move_storage(std::string const& save_path) override { return false; }
-//		bool verify_resume_data(add_torrent_params const& rd
-//			, std::vector<std::string> const* links
-//			, storage_error& error) override { return false; }
-//		std::int64_t physical_offset(int piece, int offset) override
-//		{ return piece * files().piece_length() + offset; };
-//		sha1_hash hash_for_slot(int piece, partial_hash& ph, int piece_size) override
-//		{
-//			int left = piece_size - ph.offset;
-//			assert(left >= 0);
-//			if (left > 0)
-//			{
-//				std::vector<char>& data = m_file_data[piece];
-//				// if there are padding files, those blocks will be considered
-//				// completed even though they haven't been written to the storage.
-//				// in this case, just extend the piece buffer to its full size
-//				// and fill it with zeros.
-//				if (data.size() < piece_size) data.resize(piece_size, 0);
-//				ph.h.update(&data[ph.offset], left);
+//			if (i->second.size() <= offset) return 0;
+//			iovec_t data{ i->second.data() + offset, i->second.size() - offset };
+//			int ret = 0;
+//			for (iovec_t const& b : bufs) {
+//				int const to_copy = std::min(b.size(), data.size());
+//				memcpy(b.data(), data.data(), to_copy);
+//				data = data.subspan(to_copy);
+//				ret += to_copy;
+//				if (data.empty()) break;
 //			}
-//			return ph.h.final();
+//			return ret;
 //		}
-//		bool release_files() override { return false; }
-//		bool delete_files() override { return false; }
+//		int writev(span<iovec_t const> bufs
+//			, piece_index_t piece, int offset, open_mode_t flags, storage_error& ec)
+//		{
+//			auto& data = m_file_data[piece];
+//			int ret = 0;
+//			for (auto& b : bufs) {
+//				if (data.size() < offset + b.size()) data.resize(offset + b.size());
+//				std::memcpy(data.data() + offset, b.data(), b.size());
+//				offset += b.size();
+//				ret += b.size();
+//			}
+//			return ret;
+//		}
+//		bool rename_file(file_index_t file, std::string const& new_name, storage_error& ec) override
+//		{ assert(false); return false; }
+//		status_t move_storage(std::string const& save_path
+//			, move_flags_t flags, storage_error& ec) override { return false; }
+//		bool verify_resume_data(add_torrent_params const& rd
+//			, aux::vector<std::string, file_index_t> const& links
+//			, storage_error& error) override
+//		{ return false; }
+//		void release_files(storage_error& ec) override {}
+//		void delete_files(remove_flags_t options, storage_error& ec) override {}
 //
-//		std::map<int, std::vector<char>> m_file_data;
+//		std::map<piece_index_t, std::vector<char>> m_file_data;
 //	};
 //
 //	storage_interface* temp_storage_constructor(storage_params const& params)
