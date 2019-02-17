@@ -126,6 +126,24 @@ list get_peer_info(torrent_handle const& handle)
     return result;
 }
 
+list get_full_peer_list(torrent_handle const& handle)
+{
+	
+        
+	std::vector<peer_list_entry> peers;
+	{
+		allow_threading_guard guard;
+        	handle.get_full_peer_list(peers);
+	}
+	list result;
+	
+	for (std::vector<peer_list_entry>::iterator i = peers.begin(); i != peers.end(); ++i)
+	{
+ 	       result.append(i->ip.address().to_string());
+	}
+	return result;
+}	
+	
 namespace
 {
    template <typename T>
@@ -468,6 +486,7 @@ void bind_torrent_handle()
         .def(self < self)
         .def("__hash__", (std::size_t (*)(torrent_handle const&))&libtorrent::hash_value)
         .def("get_peer_info", get_peer_info)
+	.def("get_full_peer_list",get_full_peer_list)
         .def("status", _(&torrent_handle::status), arg("flags") = 0xffffffff)
         .def("get_download_queue", get_download_queue)
         .def("file_progress", file_progress, arg("flags") = 0)
